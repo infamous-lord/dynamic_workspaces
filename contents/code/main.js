@@ -22,7 +22,7 @@ const isKde6 = typeof workspace.windowList === "function";
 const compat = isKde6
 	?
 		{ addDesktop = () =>
-			{ workspace.createDesktop(workspace.desktops.length, "dyndesk"); }
+			{ workspace.createDesktop(workspace.desktops.length, "Dynamic"); }
 		, windowAddedSignal = ws => ws.windowAdded
 		, windowList = ws => ws.windowList()
 		, desktopChangedSignal = c => c.desktopsChanged
@@ -46,7 +46,7 @@ const compat = isKde6
 		}
 	:
 		{ addDesktop = () =>
-			{ workspace.createDesktop(workspace.desktops, "dyndesk"); }
+			{ workspace.createDesktop(workspace.desktops, "Dynamic"); }
 		, windowAddedSignal = ws => ws.clientAdded
 		, windowList = ws => ws.clientList()
 		, desktopChangedSignal = c => c.desktopChanged
@@ -151,7 +151,7 @@ function removeDesktop(number)
 		debug("Not removing desktop, too few left");
 		return false;
 	}
-
+	
 	// plasma6 allows us to delete desktops in the middle. Unfortunately, this
 	// messes up pager, so we have to do what we did un plasma5 and shift all
 	// windows by hand to delete the last desktop
@@ -228,43 +228,63 @@ function onClientAdded(client)
 }
 
 /**
- * Deletes empty desktops to the right in case of a left switch
+ * Deletes empty desktop to the right or left incase of desktop switch
  */
-function onDesktopSwitch(oldDesktop)
-{
-	trace(`onDesktopSwitch(${oldDesktop})`);
+function onDesktopSwitch(oldDesktop) {
+    trace(`onDesktopSwitch(${oldDesktop})`);
 
-	const allDesktops = compat.workspaceDesktops();
-	const oldDesktopIndex = compat.findDesktop(allDesktops, compat.toDesktop(oldDesktop));
-	const currentDesktopIndex = compat.findDesktop(allDesktops, compat.toDesktop(workspace.currentDesktop));
+    const allDesktops = compat.workspaceDesktops();
+    const oldDesktopIndex = compat.findDesktop(allDesktops, compat.toDesktop(oldDesktop));
+    const currentDesktopIndex = compat.findDesktop(allDesktops, compat.toDesktop(workspace.currentDesktop));
 
-	if (oldDesktopIndex <= currentDesktopIndex)
-	{
-		debug("Desktop switched to the right - ignoring");
-	}
+    // Check if the user moved away from the first desktop
+    if (oldDesktopIndex === 0 && currentDesktopIndex !== 0) {
+        // If the first desktop is empty, delete it and shift others left
+        if (isEmptyDesktop(0)) {
+            debug("Deleting the first desktop and shifting others left...");
 
-	// start from next desktop to the right
-	let desktopIdx = currentDesktopIndex + 1;
+            // Shift all windows left from the second desktop onwards
+            compat.windowList(workspace).forEach(client => {
+                shiftRighterThan(client, 1); // Shift all windows from desktop 1
+            });
 
-	// prevent infinite loop in case of an error - only try as many times as there are desktops.
-	// Might save us if other plugins interfere with workspace creation/deletion
-	let loopCounter = 0;
-	const desktopsLength = compat.workspaceDesktops().length;
-	for (; desktopIdx < desktopsLength && loopCounter < desktopsLength; ++desktopIdx)
-	{
-		debug(`Examine desktop ${desktopIdx}`);
-		loopCounter += 1;
-		if (isEmptyDesktop(desktopIdx))
-		{
-			const success = removeDesktop(desktopIdx);
-			if (success)
-			{
-				// we removed a desktop so we need to reduce our counter also
-				desktopIdx -= 1;
-			}
-		}
-	}
+            // Delete the first desktop
+            compat.deleteLastDesktop();
+            
+           
+            debug("First desktop deleted and others shifted.");
+        }
+    }
+
+    // Remove empty desktops to the left of the current desktop
+    for (let desktopIdx = currentDesktopIndex - 1; desktopIdx >= 0; desktopIdx--) {
+        debug(`Examining desktop ${desktopIdx} (left)`);
+        if (isEmptyDesktop(desktopIdx)) {
+            removeDesktop(desktopIdx);
+            // If we delete the current desktop, adjust the index
+            if (desktopIdx < currentDesktopIndex) {
+                currentDesktopIndex--; // Adjust index if we deleted a left desktop
+            }
+        }
+    }
+
+    // Remove empty desktops to the right of the current desktop
+    for (let desktopIdx = currentDesktopIndex + 1; desktopIdx < allDesktops.length; desktopIdx++) {
+        debug(`Examining desktop ${desktopIdx} (right)`);
+        if (isEmptyDesktop(desktopIdx)) {
+            removeDesktop(desktopIdx);
+            // If we delete a right desktop, do not need to adjust index here
+        }
+    }
+
+    // Check if we need to add a new desktop if the last one is occupied
+    if (compat.clientOnDesktop(compat.windowList(workspace)[0], compat.lastDesktop())) {
+        compat.addDesktop();
+    }
+
+
 }
+
 
 
 /*****  Main part *****/

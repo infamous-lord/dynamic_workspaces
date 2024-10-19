@@ -21,7 +21,7 @@ since 5.6, see releases `1.*`, latest found
 On plasma 5:
 
 ``` bash
-git clone https://github.com/d86leader/dynamic_workspaces.git
+git clone https://github.com/infamous-lord/dynamic_workspaces.git
 cd dynamic_workspaces
 plasmapkg2 --type kwinscript -i .
 ```

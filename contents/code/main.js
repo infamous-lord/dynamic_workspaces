@@ -261,10 +261,6 @@ function onDesktopSwitch(oldDesktop) {
         debug(`Examining desktop ${desktopIdx} (left)`);
         if (isEmptyDesktop(desktopIdx)) {
             removeDesktop(desktopIdx);
-            // If we delete the current desktop, adjust the index
-            if (desktopIdx < currentDesktopIndex) {
-                currentDesktopIndex--; // Adjust index if we deleted a left desktop
-            }
         }
     }
 
